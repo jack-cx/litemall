@@ -104,6 +104,11 @@ public class WxOrderController {
         return wxOrderService.h5pay(userId, body, request);
     }
 
+    @PostMapping("paypalPay")
+    public Object paypalPay(@LoginUser Integer userId, @RequestBody String body, HttpServletRequest request) {
+        return wxOrderService.paypalPay(userId, body, request);
+    }
+
     /**
      * 微信付款成功或失败回调接口
      * <p>

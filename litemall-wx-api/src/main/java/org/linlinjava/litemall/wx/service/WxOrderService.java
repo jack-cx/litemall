@@ -9,9 +9,12 @@ import com.github.binarywang.wxpay.bean.result.BaseWxPayResult;
 import com.github.binarywang.wxpay.constant.WxPayConstants;
 import com.github.binarywang.wxpay.exception.WxPayException;
 import com.github.binarywang.wxpay.service.WxPayService;
+import com.google.gson.*;
+import com.qiniu.util.Json;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.json.JSONObject;
 import org.linlinjava.litemall.core.express.ExpressService;
 import org.linlinjava.litemall.core.express.dao.ExpressInfo;
 import org.linlinjava.litemall.core.notify.NotifyService;
@@ -35,15 +38,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.linlinjava.litemall.wx.util.WxResponseCode.*;
 
@@ -658,6 +663,146 @@ public class WxOrderService {
         }
         return ResponseUtil.ok(result);
     }
+
+    public String getPaypalToken() {
+
+        String clientId = "AfM0_iwA1SGnv0r7WIWjwRvi9AbAO-lUFKRY11PK0IxWyF8KGPN9UH7yHgbYy6jxUitvmi6uii9RyWcu";
+        String secret = "EGRkzQ61Jg_3vCjerK6_saD7GeON35twAZU2a_Du3ZEkoTzeZ44VU-5jgvl8ftcy3w35IRCAOpsKvbY7";
+
+        String base64 = Base64.getEncoder().encodeToString((clientId + ":" + secret).getBytes());
+
+
+        try {
+            String url = "https://api-m.sandbox.paypal.com/v1/oauth2/token";
+            URL obj = new URL(url);
+            HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("accept", "application/json");
+            con.setRequestProperty("accept-language", "en_US");
+            con.setRequestProperty("content-type", "application/x-www-form-urlencoded");
+            con.setRequestProperty("authorization", String.format("basic %s", base64));
+            String reqBody = "grant_type=client_credentials";
+
+            // Send request
+            con.setDoOutput(true);
+            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+            wr.writeBytes(reqBody);
+            wr.flush();
+            wr.close();
+
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(con.getInputStream()));
+            String inputLine;
+            StringBuffer response = new StringBuffer();
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+            JsonObject jsonResponse = null;
+            try {
+                jsonResponse = new JsonParser().parse(response.toString()).getAsJsonObject();
+            } catch (JsonSyntaxException e) {
+                throw new RuntimeException(e);
+            }
+
+            String token = jsonResponse.get("access_token").getAsString();
+            return token;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public JsonObject createPaypalOrder(float price, String retUrl, String cancelUrl) {
+        String token = getPaypalToken();
+        try {
+            URL url = new URL("https://api-m.sandbox.paypal.com/v2/checkout/orders");
+            HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+            httpConn.setRequestMethod("POST");
+
+            httpConn.setRequestProperty("Content-Type", "application/json");
+            httpConn.setRequestProperty("PayPal-Request-Id", "7b92603e-77ed-4896-8e78-5dea2050476a");
+            httpConn.setRequestProperty("Authorization", String.format("Bearer %s", token));
+
+            httpConn.setDoOutput(true);
+            OutputStreamWriter writer = new OutputStreamWriter(httpConn.getOutputStream());
+            writer.write(String.format("{\n" +
+                    "      intent: \"CAPTURE\",\n" +
+                    "      purchase_units: [\n" +
+                    "        {\n" +
+                    "          amount: {\n" +
+                    "            currency_code: \"USD\",\n" +
+                    "            value: \"%s\",\n" +
+                    "          },\n" +
+                    "        },\n" +
+                    "      ],\n" +
+                    "    }),\n" +
+                    "  }", price, retUrl, cancelUrl));
+            writer.flush();
+            writer.close();
+            httpConn.getOutputStream().close();
+
+            InputStream responseStream = httpConn.getResponseCode() / 100 == 2
+                    ? httpConn.getInputStream()
+                    : httpConn.getErrorStream();
+            Scanner s = new Scanner(responseStream).useDelimiter("\\A");
+            String response = s.hasNext() ? s.next() : "";
+            return new JsonParser().parse(response).getAsJsonObject();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public JsonObject capturePayment(String orderId) {
+        try {
+            URL url = new URL(String.format("https://api-m.sandbox.paypal.com/v2/checkout/orders/%s/capture", orderId));
+            HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+            httpConn.setRequestMethod("POST");
+
+            httpConn.setRequestProperty("PayPal-Request-Id", "7b92603e-77ed-4896-8e78-5dea2050476a");
+            httpConn.setRequestProperty("Authorization", "Bearer access_token6V7rbVwmlM1gFZKW_8QtzWXqpcwQ6T5vhEGYNJDAAdn3paCgRpdeMdVYmWzgbKSsECednupJ3Zx5Xd-g");
+
+            InputStream responseStream = httpConn.getResponseCode() / 100 == 2
+                    ? httpConn.getInputStream()
+                    : httpConn.getErrorStream();
+            Scanner s = new Scanner(responseStream).useDelimiter("\\A");
+            String response = s.hasNext() ? s.next() : "";
+            return new JsonParser().parse(response).getAsJsonObject();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public Object paypalPay(Integer userId, String body, HttpServletRequest request) {
+        if (userId == null) {
+            return ResponseUtil.unlogin();
+        }
+        Integer orderId = JacksonUtil.parseInteger(body, "orderId");
+        if (orderId == null) {
+            return ResponseUtil.badArgument();
+        }
+
+//        LitemallOrder order = orderService.findById(userId, orderId);
+//        if (order == null) {
+//            return ResponseUtil.badArgumentValue();
+//        }
+//        if (!order.getUserId().equals(userId)) {
+//            return ResponseUtil.badArgumentValue();
+//        }
+//
+//        // 检测是否能够取消
+//        OrderHandleOption handleOption = OrderUtil.build(order);
+//        if (!handleOption.isPay()) {
+//            return ResponseUtil.fail(ORDER_INVALID_OPERATION, "订单不能支付");
+//        }
+
+        return createPaypalOrder(10, "www.baidu.com", "www.qq.com");
+    }
+
 
     /**
      * 微信H5支付
