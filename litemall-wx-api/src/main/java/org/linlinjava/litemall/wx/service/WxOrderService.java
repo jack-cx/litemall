@@ -715,7 +715,7 @@ public class WxOrderService {
         return null;
     }
 
-    public JsonObject createPaypalOrder(float price, String retUrl, String cancelUrl) {
+    public Object createPaypalOrder(float price, String retUrl, String cancelUrl) {
         String token = getPaypalToken();
         try {
             URL url = new URL("https://api-m.sandbox.paypal.com/v2/checkout/orders");
@@ -728,18 +728,18 @@ public class WxOrderService {
 
             httpConn.setDoOutput(true);
             OutputStreamWriter writer = new OutputStreamWriter(httpConn.getOutputStream());
-            writer.write(String.format("{\n" +
-                    "      intent: \"CAPTURE\",\n" +
-                    "      purchase_units: [\n" +
+            String reqStr = String.format("{\n" +
+                    "      \"intent\": \"CAPTURE\",\n" +
+                    "      \"purchase_units\": [\n" +
                     "        {\n" +
-                    "          amount: {\n" +
-                    "            currency_code: \"USD\",\n" +
-                    "            value: \"%s\",\n" +
-                    "          },\n" +
-                    "        },\n" +
-                    "      ],\n" +
-                    "    }),\n" +
-                    "  }", price, retUrl, cancelUrl));
+                    "          \"amount\": {\n" +
+                    "           \"currency_code\": \"USD\",\n" +
+                    "            \"value\": \"%s\"\n" +
+                    "          }\n" +
+                    "        }\n" +
+                    "      ]\n" +
+                    "  }", price, retUrl, cancelUrl);
+            writer.write(reqStr);
             writer.flush();
             writer.close();
             httpConn.getOutputStream().close();
@@ -749,7 +749,7 @@ public class WxOrderService {
                     : httpConn.getErrorStream();
             Scanner s = new Scanner(responseStream).useDelimiter("\\A");
             String response = s.hasNext() ? s.next() : "";
-            return new JsonParser().parse(response).getAsJsonObject();
+            return response;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -800,7 +800,7 @@ public class WxOrderService {
 //            return ResponseUtil.fail(ORDER_INVALID_OPERATION, "订单不能支付");
 //        }
 
-        return createPaypalOrder(10, "www.baidu.com", "www.qq.com");
+        return ResponseUtil.ok(createPaypalOrder(10, "www.baidu.com", "www.qq.com"));
     }
 
 
