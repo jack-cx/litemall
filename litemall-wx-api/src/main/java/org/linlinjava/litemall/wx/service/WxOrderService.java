@@ -723,7 +723,6 @@ public class WxOrderService {
             httpConn.setRequestMethod("POST");
 
             httpConn.setRequestProperty("Content-Type", "application/json");
-            httpConn.setRequestProperty("PayPal-Request-Id", "7b92603e-77ed-4896-8e78-5dea2050476a");
             httpConn.setRequestProperty("Authorization", String.format("Bearer %s", token));
 
             httpConn.setDoOutput(true);
@@ -756,21 +755,22 @@ public class WxOrderService {
         }
     }
 
-    public JsonObject capturePayment(String orderId) {
+    private String capturePayment(String orderId) {
+
+        String token = getPaypalToken();
         try {
             URL url = new URL(String.format("https://api-m.sandbox.paypal.com/v2/checkout/orders/%s/capture", orderId));
             HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
             httpConn.setRequestMethod("POST");
-
-            httpConn.setRequestProperty("PayPal-Request-Id", "7b92603e-77ed-4896-8e78-5dea2050476a");
-            httpConn.setRequestProperty("Authorization", "Bearer access_token6V7rbVwmlM1gFZKW_8QtzWXqpcwQ6T5vhEGYNJDAAdn3paCgRpdeMdVYmWzgbKSsECednupJ3Zx5Xd-g");
+            httpConn.setRequestProperty("Content-Type", "application/json");
+            httpConn.setRequestProperty("Authorization", String.format("Bearer %s", token));
 
             InputStream responseStream = httpConn.getResponseCode() / 100 == 2
                     ? httpConn.getInputStream()
                     : httpConn.getErrorStream();
             Scanner s = new Scanner(responseStream).useDelimiter("\\A");
             String response = s.hasNext() ? s.next() : "";
-            return new JsonParser().parse(response).getAsJsonObject();
+            return response;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -786,21 +786,19 @@ public class WxOrderService {
             return ResponseUtil.badArgument();
         }
 
-//        LitemallOrder order = orderService.findById(userId, orderId);
-//        if (order == null) {
-//            return ResponseUtil.badArgumentValue();
-//        }
-//        if (!order.getUserId().equals(userId)) {
-//            return ResponseUtil.badArgumentValue();
-//        }
-//
-//        // 检测是否能够取消
-//        OrderHandleOption handleOption = OrderUtil.build(order);
-//        if (!handleOption.isPay()) {
-//            return ResponseUtil.fail(ORDER_INVALID_OPERATION, "订单不能支付");
-//        }
+        return ResponseUtil.ok(createPaypalOrder(0.01f, "http://localhost:10009/", "www.qq.com"));
+    }
 
-        return ResponseUtil.ok(createPaypalOrder(10, "www.baidu.com", "www.qq.com"));
+    public Object verifyPaypalPayment(Integer userId, String body, HttpServletRequest request) {
+        if (userId == null) {
+            return ResponseUtil.unlogin();
+        }
+        String orderId = JacksonUtil.parseString(body, "orderId");
+        if (orderId == null || orderId.length() == 0) {
+            return ResponseUtil.badArgument();
+        }
+
+        return ResponseUtil.ok(capturePayment(orderId));
     }
 
 
