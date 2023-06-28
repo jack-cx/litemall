@@ -781,10 +781,12 @@ public class WxOrderService {
         if (userId == null) {
             return ResponseUtil.unlogin();
         }
-        Integer orderId = JacksonUtil.parseInteger(body, "orderId");
+        String orderId = JacksonUtil.parseString(body, "orderSn");
         if (orderId == null) {
             return ResponseUtil.badArgument();
         }
+
+        orderService
 
         return ResponseUtil.ok(createPaypalOrder(0.01f, "http://localhost:10009/", "www.qq.com"));
     }

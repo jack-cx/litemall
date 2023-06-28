@@ -46,6 +46,10 @@ public class LitemallOrderService {
         return litemallOrderMapper.selectOneByExample(example);
     }
 
+    public LitemallOrder findByOrderSn(Integer userId, String orderSn) {
+        
+    }
+
     private String getRandomNum(Integer num) {
         String base = "0123456789";
         Random random = new Random();
